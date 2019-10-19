@@ -1,4 +1,4 @@
-DOCKER_BAZEL_IMG=gcr.io/cloud-marketplace-containers/google/bazel
+DOCKER_BAZEL_IMG=gcr.io/cloud-marketplace-containers/google/bazel:1.0.0
 DOCKER_RK_STORAGE_IMG=repository-master.rubrik.com:5000/bazel/bb_storage
 
 SRC_DIR=$(CURDIR)
@@ -17,7 +17,6 @@ all: clean bb-storage
 .NOTPARALLEL:
 
 bb-storage:
-	mkdir -p $(OUT_DIR)
 	docker run \
 		-v $(SRC_DIR):$(DOCKER_WORK_DIR) \
 		-v $(OUT_DIR):$(DOCKER_OUT_DIR) \
