@@ -5,6 +5,7 @@ SRC_DIR=$(CURDIR)
 DOCKER_WORK_DIR=/src/workspace
 OUT_DIR=/tmp/bazel-output
 DOCKER_OUT_DIR=/tmp/bazel-output
+DOCKER_LOAD_STORAGE_IMG=bazel/cmd/bb_storage:bb_storage_container
 
 BAZEL_RESULT_DIR=$(CURDIR)/bazel-result
 
@@ -31,7 +32,8 @@ bb-docker-push:
 	$(eval githash := $(shell git rev-parse --short HEAD))
 	$(eval dockertag := $(timestamp)_$(githash))
 	# TODO/sarath: don't push if githash is the same
-	docker import $(BAZEL_RESULT_DIR)/$(STORAGE_TARGET) $(DOCKER_RK_STORAGE_IMG):$(dockertag)
+	docker load -i $(BAZEL_RESULT_DIR)/$(STORAGE_TARGET)
+	docker image tag $(DOCKER_LOAD_STORAGE_IMG) $(DOCKER_RK_STORAGE_IMG):$(dockertag)
 	docker push $(DOCKER_RK_STORAGE_IMG):$(dockertag)
 
 clean:
