@@ -36,5 +36,8 @@ bb-docker-push:
 	docker image tag $(DOCKER_LOAD_STORAGE_IMG) $(DOCKER_RK_STORAGE_IMG):$(dockertag)
 	docker push $(DOCKER_RK_STORAGE_IMG):$(dockertag)
 
+test:
+	bazel test pkg/...
+
 clean:
-	rm -rf $(BAZEL_RESULT_DIR) bazel-bin bazel-workspace bazel-testlogs bazel-out
+	rm -rf $(BAZEL_RESULT_DIR)/$(STORAGE_TARGET) bazel-bin bazel-workspace bazel-testlogs bazel-out
