@@ -41,6 +41,8 @@ const (
 
 func init() {
 	prometheus.MustRegister(debugCounters)
+	// Dummy counter to verify bazel is picking up the correct dependencies
+	debugCounters.WithLabelValues("Init", "Hitg").Inc()
 }
 
 // OffsetStore maps a digest to an offset within the data file. This is
