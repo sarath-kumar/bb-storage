@@ -5,15 +5,43 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/buildbarn/bb-storage/pkg/blobstore"
 	"github.com/buildbarn/bb-storage/pkg/util"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+const (
+	blobAccessGetRetryMax = 3
+)
+
+var (
+	debugCounters = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "buildbarn",
+			Subsystem: "blobstore",
+			Name:      "circular_blob_access_debug_counters",
+			Help:      "Debug counters for events and actions in circular_blob_access",
+		},
+		[]string{"event", "action"})
+)
+
+const (
+	debugEventBlobNotFound         = "BlobNotFound"
+	debugActionBlobNotFoundHit     = "Hit"
+	debugActionBlobNotFoundSuccess = "Success"
+	debugActionBlobNotFoundFail    = "Fail"
+)
+
+func init() {
+	prometheus.MustRegister(debugCounters)
+}
 
 // OffsetStore maps a digest to an offset within the data file. This is
 // where the blob's contents may be found.
@@ -61,20 +89,33 @@ func NewCircularBlobAccess(offsetStore OffsetStore, dataStore DataStore, stateSt
 }
 
 func (ba *circularBlobAccess) Get(ctx context.Context, digest *util.Digest) (int64, io.ReadCloser, error) {
+	return ba.getWithRetry(ctx, digest)
+}
+
+func (ba *circularBlobAccess) getWithRetry(ctx context.Context, digest *util.Digest) (int64, io.ReadCloser, error) {
 	ctx, span := trace.StartSpan(ctx, "circularBlobAccess.Get")
 	defer span.End()
-	ba.lock.Lock()
-	span.Annotate(nil, "Lock obtained, calling GetCursors")
-	cursors := ba.stateStore.GetCursors()
-	offset, length, ok, err := ba.offsetStore.Get(digest, cursors)
-	span.Annotate([]trace.Attribute{trace.Int64Attribute("offset", int64(offset)), trace.Int64Attribute("length", length), trace.BoolAttribute("object_found", ok)}, "offsetStore.Get completed")
-	ba.lock.Unlock()
-	if err != nil {
-		return 0, nil, err
-	} else if ok {
-		span.Annotate(nil, "Obtaining body ReadCloser")
-		return length, ba.dataStore.Get(offset, length), nil
+
+	for i := 0; i < blobAccessGetRetryMax; i++ {
+		ba.lock.Lock()
+		span.Annotate(nil, "Lock obtained, calling GetCursors")
+		cursors := ba.stateStore.GetCursors()
+		offset, length, ok, err := ba.offsetStore.Get(digest, cursors)
+		span.Annotate([]trace.Attribute{trace.Int64Attribute("offset", int64(offset)), trace.Int64Attribute("length", length), trace.BoolAttribute("object_found", ok)}, "offsetStore.Get completed")
+		ba.lock.Unlock()
+		if err != nil {
+			return 0, nil, err
+		} else if ok {
+			if i > 0 {
+				debugCounters.WithLabelValues(debugEventBlobNotFound, debugActionBlobNotFoundSuccess).Inc()
+			}
+			span.Annotate(nil, "Obtaining body ReadCloser")
+			return length, ba.dataStore.Get(offset, length), nil
+		}
+		debugCounters.WithLabelValues(debugEventBlobNotFound, debugActionBlobNotFoundHit).Inc()
+		time.Sleep(100 * time.Millisecond)
 	}
+	debugCounters.WithLabelValues(debugEventBlobNotFound, debugActionBlobNotFoundFail).Inc()
 	return 0, nil, status.Errorf(codes.NotFound, "Blob not found")
 }
 
