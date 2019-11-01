@@ -113,7 +113,7 @@ func (ba *circularBlobAccess) getWithRetry(ctx context.Context, digest *util.Dig
 			return length, ba.dataStore.Get(offset, length), nil
 		}
 		debugCounters.WithLabelValues(debugEventBlobNotFound, debugActionBlobNotFoundHit).Inc()
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 	debugCounters.WithLabelValues(debugEventBlobNotFound, debugActionBlobNotFoundFail).Inc()
 	return 0, nil, status.Errorf(codes.NotFound, "Blob not found")
