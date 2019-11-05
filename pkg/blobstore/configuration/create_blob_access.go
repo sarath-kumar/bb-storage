@@ -94,7 +94,7 @@ func createBlobAccess(configuration *pb.BlobAccessConfiguration, storageType str
 				return nil, err
 			}
 			offsetStore = circular.NewCachingOffsetStore(
-				circular.NewFileOffsetStore(offsetFile, backend.Circular.OffsetFileSizeBytes),
+				circular.NewFileOffsetStore(storageType, offsetFile, backend.Circular.OffsetFileSizeBytes),
 				uint(backend.Circular.OffsetCacheSize))
 		case util.DigestKeyWithInstance:
 			// Open an offset file for every instance. This is
@@ -106,7 +106,7 @@ func createBlobAccess(configuration *pb.BlobAccessConfiguration, storageType str
 					return nil, err
 				}
 				offsetStores[instance] = circular.NewCachingOffsetStore(
-					circular.NewFileOffsetStore(offsetFile, backend.Circular.OffsetFileSizeBytes),
+					circular.NewFileOffsetStore(storageType, offsetFile, backend.Circular.OffsetFileSizeBytes),
 					uint(backend.Circular.OffsetCacheSize))
 			}
 			offsetStore = circular.NewDemultiplexingOffsetStore(func(instance string) (circular.OffsetStore, error) {

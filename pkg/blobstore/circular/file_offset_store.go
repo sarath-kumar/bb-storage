@@ -22,7 +22,7 @@ const (
 	// TODO(edsch): Should this option be configurable? If not, is
 	// this the right value? Maybe a lower value is sufficient in
 	// practice?
-	maximumIterations = 8
+	maximumIterations = 12
 )
 
 var (
@@ -107,8 +107,9 @@ func (or *offsetRecord) withAttempt(attempt uint32) offsetRecord {
 }
 
 type fileOffsetStore struct {
-	file ReadWriterAt
-	size uint64
+	storageType string
+	file        ReadWriterAt
+	size        uint64
 }
 
 // NewFileOffsetStore creates a file-based accessor for the offset
@@ -120,10 +121,11 @@ type fileOffsetStore struct {
 // approach, where objects may only be displaced to less preferential
 // slots by objects with a higher offset. In other words, more recently
 // stored blobs displace older ones.
-func NewFileOffsetStore(file ReadWriterAt, size uint64) OffsetStore {
+func NewFileOffsetStore(storageType string, file ReadWriterAt, size uint64) OffsetStore {
 	return &fileOffsetStore{
-		file: file,
-		size: size,
+		storageType: storageType,
+		file:        file,
+		size:        size,
 	}
 }
 
@@ -152,6 +154,7 @@ func (os *fileOffsetStore) Get(digest *util.Digest, cursors Cursors) (uint64, in
 	for iteration := uint32(1); ; iteration++ {
 		if iteration >= maximumIterations {
 			operationsIterationsGetTooManyIterations.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionGet, debugCounterResultTooManyIterations).Inc()
 			return 0, 0, false, nil
 		}
 
@@ -160,18 +163,22 @@ func (os *fileOffsetStore) Get(digest *util.Digest, cursors Cursors) (uint64, in
 		storedRecord, err := os.getRecordAtPosition(position)
 		if err != nil {
 			operationsIterationsGetError.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionGet, debugCounterResultError).Inc()
 			return 0, 0, false, err
 		}
 		if !cursors.Contains(storedRecord.getOffset(), storedRecord.getLength()) {
 			operationsIterationsGetNotFound.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionGet, debugCounterResultNotFound).Inc()
 			return 0, 0, false, nil
 		}
 		if storedRecord.digestAndAttemptEqual(lookupRecord) {
 			operationsIterationsGetSuccess.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionGet, debugCounterResultSuccess).Inc()
 			return storedRecord.getOffset(), storedRecord.getLength(), true, nil
 		}
 		if os.getPositionOfSlot(storedRecord.getSlot()) != position {
 			operationsIterationsGetNotFound.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionGet, debugCounterResultNotFound).Inc()
 			return 0, 0, false, nil
 		}
 	}
@@ -217,16 +224,19 @@ func (os *fileOffsetStore) Put(digest *util.Digest, offset uint64, length int64,
 	for iteration := 1; ; iteration++ {
 		if iteration > maximumIterations {
 			operationsIterationsPutTooManyIterations.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionPut, debugCounterResultTooManyIterations).Inc()
 			return nil
 		}
 
 		if nextRecord, more, err := os.putRecord(record, cursors); err != nil {
 			operationsIterationsPutError.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionPut, debugCounterResultError).Inc()
 			return err
 		} else if more {
 			record = nextRecord
 		} else {
 			operationsIterationsPutSuccess.Observe(float64(iteration))
+			debugCounters.WithLabelValues(os.storageType, debugCounterActionPut, debugCounterResultSuccess).Inc()
 			return nil
 		}
 	}
