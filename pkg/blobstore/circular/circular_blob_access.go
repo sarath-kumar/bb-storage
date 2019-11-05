@@ -40,6 +40,7 @@ type StateStore interface {
 }
 
 type circularBlobAccess struct {
+	storageType string
 	// Fields that are constant or lockless.
 	dataStore DataStore
 
@@ -52,8 +53,9 @@ type circularBlobAccess struct {
 // NewCircularBlobAccess creates a new circular storage backend. Instead
 // of writing data to storage directly, all three storage files are
 // injected through separate interfaces.
-func NewCircularBlobAccess(offsetStore OffsetStore, dataStore DataStore, stateStore StateStore) blobstore.BlobAccess {
+func NewCircularBlobAccess(storageType string, offsetStore OffsetStore, dataStore DataStore, stateStore StateStore) blobstore.BlobAccess {
 	return &circularBlobAccess{
+		storageType: storageType,
 		offsetStore: offsetStore,
 		dataStore:   dataStore,
 		stateStore:  stateStore,
@@ -75,6 +77,7 @@ func (ba *circularBlobAccess) Get(ctx context.Context, digest *util.Digest) (int
 		span.Annotate(nil, "Obtaining body ReadCloser")
 		return length, ba.dataStore.Get(offset, length), nil
 	}
+	debugCounters.WithLabelValues(ba.storageType, debugCounterActionGet, debugCounterResultBlobNotFound).Inc()
 	return 0, nil, status.Errorf(codes.NotFound, "Blob not found")
 }
 

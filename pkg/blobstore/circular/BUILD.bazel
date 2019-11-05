@@ -14,6 +14,7 @@ go_library(
         "positive_sized_blob_state_store.go",
         "read_writer_at.go",
         "simple_digest.go",
+        "debug_counters.go",
     ],
     importpath = "github.com/buildbarn/bb-storage/pkg/blobstore/circular",
     visibility = ["//visibility:public"],

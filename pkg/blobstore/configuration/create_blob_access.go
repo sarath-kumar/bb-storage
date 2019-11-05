@@ -123,6 +123,7 @@ func createBlobAccess(configuration *pb.BlobAccessConfiguration, storageType str
 		}
 
 		implementation = circular.NewCircularBlobAccess(
+			storageType,
 			offsetStore,
 			circular.NewFileDataStore(dataFile, backend.Circular.DataFileSizeBytes),
 			circular.NewPositiveSizedBlobStateStore(
